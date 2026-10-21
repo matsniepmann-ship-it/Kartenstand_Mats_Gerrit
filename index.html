@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kartenstand</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kartenstand">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f3f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e110f" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+/* Layout: eine schmale Spalte (max. 640px) wie ein Spielblock; jeder Abschnitt eine Karte, Eingaben über Sheets von unten */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --fg:#141815; --muted:#596059; --faint:#868d86;
+  --line:#e2e6e1; --line-strong:#c9d0c9;
+  --accent:#1d6a47; --accent-fg:#ffffff; --accent-soft:#e2efe7;
+  --mats:#2a78d6; --gerrit:#eb6834; --draw:#a2a8a2;
+  --warn-bg:#fbf0d6; --warn-fg:#6e4a00; --danger:#c43c3c;
+  --h0:#e7eae6; --h1:#bfe0cb; --h2:#7fc19b; --h3:#3d9a67; --h4:#1d6a47;
+  --shadow:0 12px 32px rgba(12,24,16,.18);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e110f; --surface:#181c19; --fg:#eef1ed; --muted:#a3aba4; --faint:#7a827b;
+    --line:#262b27; --line-strong:#363c37;
+    --accent:#41a878; --accent-fg:#06110b; --accent-soft:#17301f;
+    --mats:#3987e5; --gerrit:#d95926; --draw:#6c736d;
+    --warn-bg:#3a2d0e; --warn-fg:#f2c862; --danger:#e66767;
+    --h0:#222724; --h1:#1c4630; --h2:#236d47; --h3:#34a065; --h4:#76d7a1;
+    --shadow:0 12px 32px rgba(0,0,0,.55); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e110f; --surface:#181c19; --fg:#eef1ed; --muted:#a3aba4; --faint:#7a827b;
+  --line:#262b27; --line-strong:#363c37;
+  --accent:#41a878; --accent-fg:#06110b; --accent-soft:#17301f;
+  --mats:#3987e5; --gerrit:#d95926; --draw:#6c736d;
+  --warn-bg:#3a2d0e; --warn-fg:#f2c862; --danger:#e66767;
+  --h0:#222724; --h1:#1c4630; --h2:#236d47; --h3:#34a065; --h4:#76d7a1;
+  --shadow:0 12px 32px rgba(0,0,0,.55); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{color-scheme:light;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(48px + env(safe-area-inset-bottom,0px));
+  -webkit-tap-highlight-color:transparent}
+.pill{cursor:pointer}
+.setup{display:flex;flex-direction:column;gap:14px}
+.setup h2{font-size:22px}
+.setup ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:14px}
+.err{font-size:13.5px;color:var(--danger)}
+.code-box{font:12px ui-monospace,Menlo,Consolas,monospace;word-break:break-all;background:var(--bg);border:1px solid var(--line-strong);border-radius:10px;padding:10px;user-select:all;-webkit-user-select:all}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.kv span:first-child{color:var(--muted)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+h1,h2,h3{margin:0;text-wrap:balance}
+p{margin:0}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+
+/* Kopfzeile */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 10px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.mark{width:36px;height:36px;border-radius:10px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-size:20px;flex:none}
+.brand h1{font-size:19px;letter-spacing:-.01em}
+.brand p{font-size:12.5px;color:var(--muted)}
+.top-actions{display:flex;align-items:center;gap:6px;flex:none}
+.icon-btn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--muted)}
+.icon-btn:hover{background:var(--line)}
+.back{display:flex;align-items:center;gap:4px;color:var(--accent);font-weight:600;padding:8px 8px 8px 0}
+.pill{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--line);color:var(--muted);white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.pill.ok::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.proto{font-size:13px;color:var(--muted);background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+
+/* Karten */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.card-head h3{font-size:16px}
+.note{font-size:12.5px;color:var(--faint)}
+.empty{color:var(--muted);font-size:14px;padding:8px 0}
+
+/* Spiele-Liste */
+.game-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:10px;text-align:left;width:100%}
+.game-card{cursor:pointer}
+.game-card:hover{border-color:var(--line-strong)}
+.gc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.gc-head h2{font-size:18px}
+.gc-title{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;min-width:0}
+.gc-meta{font-size:12.5px;color:var(--muted)}
+.gc-head .dots{margin:-4px -6px 0 0}
+.hidden-note{display:flex;justify-content:center;gap:6px;font-size:13px;color:var(--muted)}
+.manage{display:flex;flex-direction:column}
+.manage-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.manage-row:first-child{border-top:0}
+.manage-row .nm{text-align:left;min-width:0}
+.manage-row .nm b{display:block;font-size:15px}
+.manage-row .nm span{font-size:12.5px;color:var(--muted)}
+.page-title{font-size:26px;letter-spacing:-.01em}
+.gc-score{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.gc-score b{color:var(--fg);font-variant-numeric:tabular-nums}
+.add-game{border:1.5px dashed var(--line-strong);border-radius:var(--radius);padding:14px;color:var(--accent);font-weight:600}
+.add-game:hover{background:var(--accent-soft)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px;flex:none}
+.dot.m{background:var(--mats)} .dot.g{background:var(--gerrit)} .dot.d{background:var(--draw)}
+
+/* Anteilsbalken: Mats links, Unentschieden Mitte, Gerrit rechts */
+.bar{display:flex;gap:2px;height:10px;border-radius:5px;overflow:hidden;background:var(--line)}
+.bar span{display:block;height:100%}
+.bar .m{background:var(--mats)} .bar .g{background:var(--gerrit)} .bar .d{background:var(--draw)}
+
+/* Spielstand */
+.versus{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:8px}
+.side{display:flex;flex-direction:column;gap:2px}
+.side.g{align-items:flex-end;text-align:right}
+.who{font-size:14px;font-weight:600;display:flex;align-items:center}
+.big{font-size:44px;font-weight:700;line-height:1;letter-spacing:-.02em}
+.pct{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mid{display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:4px}
+.mid .colon{font-size:30px;font-weight:600;color:var(--faint);line-height:1}
+.mid .drawn{font-size:12px;color:var(--muted);white-space:nowrap}
+.sub{font-size:13px;color:var(--muted)}
+.primary{background:var(--accent);color:var(--accent-fg);font-weight:650;font-size:16px;border-radius:12px;padding:14px;width:100%}
+.primary:hover{filter:brightness(1.06)}
+.primary:disabled{opacity:.38;cursor:default;filter:none}
+.secondary{border:1px solid var(--line-strong);border-radius:12px;padding:12px;font-weight:600;width:100%}
+.danger-btn{background:var(--danger);color:#fff;font-weight:650;border-radius:12px;padding:13px;width:100%}
+
+/* Segment-Schalter */
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:2px;gap:2px}
+.seg button{padding:5px 11px;border-radius:8px;font-size:13px;color:var(--muted);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend span{display:flex;align-items:center}
+
+/* Diagramm */
+.chart{position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.chart svg{display:block;width:100%;overflow:visible}
+.chart text{font-family:var(--font);font-size:10.5px;fill:var(--faint);font-variant-numeric:tabular-nums}
+.chart .endlab{fill:var(--fg);font-weight:600;font-size:11px}
+.ctip{position:absolute;top:0;pointer-events:none;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:8px 10px;font-size:12.5px;box-shadow:var(--shadow);min-width:150px;z-index:2}
+.ctip b{display:block;margin-bottom:3px;font-size:12px}
+.ctip div{display:flex;align-items:center;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+.ctip div span{display:flex;align-items:center;color:var(--muted)}
+
+/* Kalender */
+.heat-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.heat-scroll svg{display:block}
+.heat-scroll text{font-family:var(--font);font-size:10px;fill:var(--faint)}
+.hc{cursor:pointer}
+.h0{fill:var(--h0)} .h1{fill:var(--h1)} .h2{fill:var(--h2)} .h3{fill:var(--h3)} .h4{fill:var(--h4)}
+.hc.fut{opacity:.35;cursor:default}
+.hc.sel{stroke:var(--fg);stroke-width:1.6}
+.heat-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.scale{display:flex;align-items:center;gap:3px;font-size:11.5px;color:var(--faint)}
+.scale i{width:11px;height:11px;border-radius:2px;display:block}
+.dayinfo{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--accent-soft);border-radius:10px;padding:9px 12px;font-size:13.5px}
+.link{color:var(--accent);font-weight:600;white-space:nowrap}
+.tip{position:fixed;z-index:30;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12.5px;padding:6px 9px;border-radius:7px;white-space:nowrap}
+
+/* Tabelle */
+.tbl-wrap{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:600;text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+td{padding:9px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.num{color:var(--faint);font-variant-numeric:tabular-nums;width:44px}
+td.when{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--muted)}
+td.res{width:100%}
+td.res .r{display:flex;align-items:center;font-weight:550}
+td.res .n{font-size:12.5px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+td.act{width:36px;text-align:right}
+.dots{width:32px;height:28px;border-radius:8px;color:var(--muted);font-size:18px;line-height:1}
+.dots:hover{background:var(--line)}
+.approx{color:var(--faint)}
+.tbl-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--faint)}
+
+/* Statistik */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+.tile .k{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.tile .v{font-size:20px;font-weight:700;margin-top:2px}
+.tile .s{font-size:12.5px;color:var(--muted)}
+@media (max-width:430px){.tiles{grid-template-columns:1fr 1fr}.tiles .tile:first-child{grid-column:1/-1}}
+.months{display:flex;flex-direction:column;gap:10px}
+.month{display:grid;grid-template-columns:122px 1fr;gap:4px 12px;align-items:center}
+.month .lab{font-size:13.5px;font-weight:600}
+.month .nums{grid-column:2;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* Protokoll */
+details summary{cursor:pointer;font-weight:650;font-size:16px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"›";color:var(--faint);font-size:20px;transform:rotate(90deg);transition:transform .15s}
+details[open] summary::after{transform:rotate(-90deg)}
+.log{display:flex;flex-direction:column;margin-top:10px}
+.log-item{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px}
+.log-item time{display:block;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+/* Sheets, Menü, Toast */
+#sheet-root .overlay{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:40}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--surface);border-radius:18px 18px 0 0;box-shadow:var(--shadow);
+  padding:20px max(20px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));
+  max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px;max-height:90vh;overflow-y:auto;animation:up .2s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+.sheet h2{font-size:20px}
+.sheet .sub{margin-top:-8px}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pick button{border:1.5px solid var(--line-strong);border-radius:14px;padding:18px 10px;font-size:17px;font-weight:650;display:flex;flex-direction:column;align-items:center;gap:8px}
+.pick button:hover{background:var(--bg)}
+.pick button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.pick button .sw{width:18px;height:18px;border-radius:50%}
+.pick .wide{grid-column:1/-1;flex-direction:row;justify-content:center;padding:13px;font-size:15px}
+.pick .wide .sw{width:12px;height:12px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:600}
+.field input{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line-strong);border-radius:10px;padding:11px 12px;width:100%;font-weight:400}
+.radio3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.radio3 button{border:1.5px solid var(--line-strong);border-radius:10px;padding:10px 4px;font-weight:600;font-size:14px;color:var(--fg);display:flex;align-items:center;justify-content:center}
+.radio3 button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+.hint{font-size:12.5px;color:var(--faint);font-weight:400}
+.switch-row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14.5px}
+.switch{width:46px;height:28px;border-radius:14px;background:var(--line-strong);position:relative;flex:none;transition:background .15s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.switch[aria-pressed="true"]{background:var(--accent)}
+.switch[aria-pressed="true"]::after{transform:translateX(18px)}
+#menu{position:fixed;z-index:35;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow);padding:4px;min-width:150px;display:flex;flex-direction:column}
+#menu button{text-align:left;padding:10px 12px;border-radius:8px;font-size:14.5px}
+#menu button:hover{background:var(--bg)}
+#menu .del{color:var(--danger)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--fg);color:var(--bg);
+  border-radius:12px;padding:11px 14px;display:flex;align-items:center;gap:14px;font-size:14px;box-shadow:var(--shadow);width:max-content;max-width:calc(100% - 32px)}
+#toast button{color:var(--h2);font-weight:700;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="sheet-root" hidden></div>
+<div id="menu" hidden></div>
+<div id="toast" hidden></div>
+<div id="tip" class="tip" hidden></div>
+
+<script>
+/* ---------- Grundlagen ---------- */
+const KEY = 'kartenstand-v1';
+const P = { M:{name:'Mats',c:'m'}, G:{name:'Gerrit',c:'g'}, D:{name:'Unentschieden',c:'d'} };
+const MON = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const MONL = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pct = (x, d = 1) => (x * 100).toLocaleString('de-DE', { maximumFractionDigits: d }) + ' %';
+const pad2 = n => String(n).padStart(2, '0');
+const dayKey = ts => { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+const keyToDate = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const fDate = ts => new Date(ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' });
+const fDateLong = ts => new Date(ts).toLocaleDateString('de-DE', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric' });
+const fTime = ts => new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' });
+const toLocalInput = ts => { const d = new Date(ts); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+'T'+pad2(d.getHours())+':'+pad2(d.getMinutes()); };
+const startOfDay = ts => { const d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); };
+const addDays = (ts, n) => { const d = new Date(ts); d.setDate(d.getDate() + n); return d.getTime(); };
+const runden = n => n === 1 ? '1 Runde' : n + ' Runden';
+
+/* ---------- Daten ---------- */
+// Alles liegt im Google Sheet. Das Handy hält eine Kopie (für den Start ohne Netz)
+// plus die Warteschlange der Änderungen, die noch nicht hochgeladen sind.
+const empty = () => ({ v:1, me:null, cfg:null, games:[], rounds:[], log:[], queue:[], version:0, lastSync:0 });
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
+if (!S || S.v !== 1) S = empty();
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+
+const ui = { view:'home', gameId:null, chartMode:'abs', drawsIncl:true, limit:10, day:null, heatRange:'365', logOpen:false, logAll:false, syncing:false, allShown:200 };
+
+const roundsOf = gid => S.rounds.filter(r => r.game === gid && !r.deleted).sort((a, b) => a.ts - b.ts || (a.id < b.id ? -1 : 1));
+const tally = rs => { const t = { m:0, g:0, d:0, n:rs.length }; rs.forEach(r => r.result === 'M' ? t.m++ : r.result === 'G' ? t.g++ : t.d++); return t; };
+const snap = r => ({ result:r.result, ts:r.ts, note:r.note, deleted:r.deleted, tk:r.tk, approx:r.approx });
+
+/* ---------- Änderungen + Upload-Warteschlange ---------- */
+// Jede Änderung wird sofort auf dem Handy gespeichert und als „Op“ in die Warteschlange gelegt.
+// sync() schickt die Warteschlange ans Sheet. Jede Op hat eine eigene Kennung; das Sheet
+// wendet eine bekannte Op kein zweites Mal an, doppelt hochladen schadet also nicht.
+const plain = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent; };
+function pushOp(entry, payload) {
+  entry.text = plain(describe(entry));
+  S.log.push(entry);
+  S.queue.push({ opId:entry.id, at:entry.ts, by:entry.by, action:entry.action, before:entry.before, after:entry.after, text:entry.text, ...payload });
+  save(); render(); sync();
+}
+function commit(action, round, before) {
+  round.upd = Date.now();
+  pushOp({ id:uid(), ts:Date.now(), by:S.me || '?', action, roundId:round.id, game:round.game, before, after:snap(round) }, { round:{ ...round } });
+}
+// Spiele (Name, ausgeblendet) laufen über denselben Weg. Runden hängen an der
+// Spiel-ID, nicht am Namen; Umbenennen ändert an den Runden also nichts.
+function commitGame(action, game, before) {
+  pushOp({ id:uid(), ts:Date.now(), by:S.me || '?', action, roundId:null, game:game.id, before, after:{ name:game.name, hidden:!!game.hidden } }, { game:{ ...game } });
+}
+function setHidden(g, hidden) {
+  if (!!g.hidden === hidden) return;
+  const b = { name:g.name, hidden:!!g.hidden }; g.hidden = hidden; commitGame(hidden ? 'hide' : 'show', g, b);
+}
+// Eine noch nicht hochgeladene Op wieder auf den frisch geladenen Stand legen
+function applyOp(op) {
+  const put = (arr, obj) => { const i = arr.findIndex(x => x.id === obj.id); if (i >= 0) arr[i] = { ...obj }; else arr.push({ ...obj }); };
+  if (op.round) put(S.rounds, op.round);
+  if (op.game) put(S.games, op.game);
+  if (!S.log.some(e => e.id === op.opId)) S.log.push({ id:op.opId, ts:op.at, by:op.by, action:op.action, game:op.round ? op.round.game : op.game.id, roundId:op.round ? op.round.id : null, before:op.before, after:op.after, text:op.text });
+}
+
+let syncing = false, syncAgain = false;
+async function sync(force) {
+  if (!S.cfg) return;
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; renderPills();
+  const ops = S.queue.slice();
+  try {
+    const res = await fetch(S.cfg.url, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body:JSON.stringify({ pin:S.cfg.pin, ops, known:force ? 0 : S.version }) });
+    if (!res.ok) throw Object.assign(new Error('http'), { code:'http' });
+    const data = await res.json();
+    if (!data.ok) throw Object.assign(new Error(data.error), { code:data.error });
+    const done = new Set(data.applied || []);
+    S.queue = S.queue.filter(o => !done.has(o.opId));
+    S.version = data.version; S.lastSync = Date.now(); ui.net = 'ok';
+    if (!data.unchanged) {
+      S.games = data.state.games; S.rounds = data.state.rounds; S.log = data.state.log;
+      S.queue.forEach(applyOp);
+      save(); render();
+    } else save();
+  } catch (e) {
+    ui.net = e.code === 'wrong-pin' ? 'pin' : e.code === 'no-pin' ? 'nopin' : (e.code && e.code !== 'http') ? 'error' : 'offline';
+  } finally {
+    syncing = false; renderPills();
+    if (syncAgain) { syncAgain = false; sync(); }
+  }
+}
+window.addEventListener('online', () => sync());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+setInterval(() => { if (!document.hidden) sync(); }, 60000);
+
+function pillHTML() {
+  const q = S.queue.length;
+  if (syncing) return '<span class="pill" data-act="sync-now">Gleicht ab …</span>';
+  if (ui.net === 'pin') return '<span class="pill warn" data-act="settings">PIN stimmt nicht</span>';
+  if (ui.net === 'nopin') return '<span class="pill warn" data-act="settings">Im Sheet fehlt die PIN</span>';
+  if (q) return `<span class="pill warn" data-act="sync-now">${q === 1 ? '1 Änderung wartet' : q + ' Änderungen warten'} auf Upload</span>`;
+  if (ui.net === 'offline') return '<span class="pill" data-act="sync-now">Offline</span>';
+  if (ui.net === 'error') return '<span class="pill warn" data-act="sync-now">Abgleich fehlgeschlagen</span>';
+  return '<span class="pill ok" data-act="sync-now">Aktuell</span>';
+}
+function renderPills() { document.querySelectorAll('[data-pill]').forEach(el => el.innerHTML = pillHTML()); }
+
+/* ---------- Verbindung einrichten ---------- */
+// Einrichtungscode = „KS1.“ + Base64 von {u: Web-App-Adresse, p: PIN}. Mats kopiert ihn in den
+// Einstellungen und schickt ihn Gerrit; Gerrit fügt ihn in seiner App ein.
+const makeCode = cfg => 'KS1.' + btoa(unescape(encodeURIComponent(JSON.stringify({ u:cfg.url, p:cfg.pin }))));
+function readCode(text) {
+  const m = String(text).match(/KS1\.([A-Za-z0-9+/=]+)/);
+  if (!m) return null;
+  try { const o = JSON.parse(decodeURIComponent(escape(atob(m[1])))); return o.u && o.p ? { url:o.u, pin:o.p } : null; } catch (e) { return null; }
+}
+async function connect(cfg) {
+  const res = await fetch(cfg.url, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body:JSON.stringify({ pin:cfg.pin, ops:[], known:0 }) });
+  const data = await res.json();
+  if (!data.ok) throw Object.assign(new Error(data.error), { code:data.error });
+  S.cfg = cfg; S.games = data.state.games; S.rounds = data.state.rounds; S.log = data.state.log;
+  S.version = data.version; S.lastSync = Date.now(); ui.net = 'ok';
+  save();
+}
+function renderSetup() {
+  const installHint = isIOS && !standalone()
+    ? `<p class="proto"><strong>Erst zum Home-Bildschirm hinzufügen:</strong> Tippe in Safari auf „Teilen“ und dann „Zum Home-Bildschirm“. Öffne Kartenstand danach über das neue Symbol und richte die Verbindung dort ein. Safari und die Home-Bildschirm-App speichern getrennt.</p>` : '';
+  $('#app').innerHTML = `
+    <header class="top"><div class="brand"><span class="mark" aria-hidden="true">♠&#xFE0E;</span><div><h1>Kartenstand</h1><p>Mats &amp; Gerrit</p></div></div></header>
+    ${installHint}
+    <section class="card setup">
+      <h2>Verbindung einrichten</h2>
+      <label class="field" for="su-code">Einrichtungscode<input id="su-code" type="text" placeholder="KS1.…" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <p class="hint">Den Code bekommst du von Mats. Er steht in seiner App unter Einstellungen → Einrichtungscode kopieren.</p>
+      <details><summary style="font-size:14px;color:var(--accent)">Stattdessen Adresse und PIN eingeben</summary>
+        <div class="setup" style="margin-top:12px">
+          <label class="field" for="su-url">Web-App-Adresse<input id="su-url" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+          <label class="field" for="su-pin">PIN<input id="su-pin" type="password" autocomplete="off"></label>
+        </div></details>
+      <p class="err" id="su-err" hidden></p>
+      <button class="primary" data-act="connect" id="su-btn">Verbinden</button>
+    </section>`;
+}
+const connectError = e => ({ 'wrong-pin':'Die PIN stimmt nicht.', 'no-pin':'Im Sheet ist noch keine PIN festgelegt (Menü Kartenstand → PIN festlegen).', 'bad-code':'Der Einrichtungscode ist unvollständig. Kopiere ihn bitte noch einmal komplett.', 'bad-url':'Die Adresse muss mit https://script.google.com beginnen und auf /exec enden.' }[e.code]
+  || 'Keine Verbindung. Prüfe die Internetverbindung und die Web-App-Adresse.');
+
+/* ---------- Icons ---------- */
+const ICON = {
+  gear:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  back:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>'
+};
+const seg = (act, opts, cur) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-pressed="${String(v) === String(cur)}">${l}</button>`).join('')}</div>`;
+const bar = t => t.n ? `<div class="bar" aria-hidden="true"><span class="m" style="width:${t.m / t.n * 100}%"></span>${t.d ? `<span class="d" style="width:${t.d / t.n * 100}%"></span>` : ''}<span class="g" style="width:${t.g / t.n * 100}%"></span></div>` : '<div class="bar"></div>';
+
+/* ---------- Ansichten ---------- */
+function render() {
+  hideMenu();
+  if (!S.cfg) { renderSetup(); return; }
+  const ok = S.games.some(g => g.id === ui.gameId);
+  if (ui.view === 'game' && ok) renderGame();
+  else if (ui.view === 'all' && ok) renderAll();
+  else { ui.view = 'home'; renderHome(); }
+}
+
+function renderHome() {
+  const visible = S.games.filter(g => !g.hidden), hiddenN = S.games.length - visible.length;
+  const cards = visible.map(g => {
+    const rs = roundsOf(g.id), t = tally(rs), last = rs[rs.length - 1];
+    return `<div class="game-card" role="button" tabindex="0" data-act="open-game" data-id="${g.id}">
+      <div class="gc-head"><div class="gc-title"><h2>${esc(g.name)}</h2><span class="gc-meta">${runden(t.n)}${last ? ' · zuletzt ' + fDate(last.ts) : ''}</span></div>
+        <button class="dots" data-act="gmenu" data-id="${g.id}" aria-label="Aktionen für ${esc(g.name)}">⋯</button></div>
+      <div class="gc-score"><span><i class="dot m"></i>Mats <b>${t.m}</b></span><span><i class="dot g"></i>Gerrit <b>${t.g}</b></span><span><i class="dot d"></i>Unentschieden <b>${t.d}</b></span></div>
+      ${bar(t)}
+    </div>`;
+  }).join('') || '<p class="empty" style="text-align:center">Keine Spiele auf der Startseite.</p>';
+  const hiddenNote = hiddenN ? `<p class="hidden-note">${hiddenN === 1 ? '1 Spiel ist' : hiddenN + ' Spiele sind'} ausgeblendet.<button class="link" data-act="manage-games">Spiele verwalten</button></p>` : '';
+  $('#app').innerHTML = `
+    <header class="top">
+      <div class="brand"><span class="mark" aria-hidden="true">♠&#xFE0E;</span><div><h1>Kartenstand</h1><p>Mats &amp; Gerrit</p></div></div>
+      <div class="top-actions"><span data-pill>${pillHTML()}</span><button class="icon-btn" data-act="settings" aria-label="Einstellungen">${ICON.gear}</button></div>
+    </header>
+    ${isIOS && !standalone() ? '<p class="proto">Tipp: Über „Teilen“ → „Zum Home-Bildschirm“ wird Kartenstand zur App mit eigenem Symbol, die auch ohne Netz startet.</p>' : ''}
+    ${cards}
+    <button class="add-game" data-act="new-game">+ Neues Spiel hinzufügen</button>
+    ${hiddenNote}`;
+}
+
+function renderAll() {
+  const g = S.games.find(x => x.id === ui.gameId);
+  const rs = roundsOf(g.id), numbered = rs.map((r, i) => ({ r, n:i + 1 })).reverse();
+  const shown = numbered.slice(0, ui.allShown);
+  $('#app').innerHTML = `
+    <header class="top">
+      <button class="back" data-act="back-game">${ICON.back}${esc(g.name)}</button>
+      <div class="top-actions"><span data-pill>${pillHTML()}</span></div>
+    </header>
+    <div><h2 class="page-title">Alle Runden</h2><p class="sub">${esc(g.name)} · ${runden(rs.length)}, neueste zuerst</p></div>
+    <section class="card">
+      ${shown.length ? `<div class="tbl-wrap"><table><thead><tr><th>Nr.</th><th>Datum</th><th>Ergebnis</th><th></th></tr></thead><tbody>${rowsHTML(shown)}</tbody></table></div>` : '<p class="empty">Noch keine Runden erfasst.</p>'}
+      ${numbered.length > shown.length ? `<button class="secondary" data-act="all-more">Weitere ${Math.min(200, numbered.length - shown.length)} Runden anzeigen</button>` : ''}
+    </section>`;
+}
+
+function renderGame() {
+  const g = S.games.find(x => x.id === ui.gameId);
+  const rs = roundsOf(g.id), t = tally(rs), dec = t.m + t.g;
+  const heatScroll = $('.heat-scroll')?.scrollLeft;
+  const imp = rs.map((r, i) => r.src === 'import' ? i + 1 : 0).filter(Boolean);
+  $('#app').innerHTML = `
+    <header class="top">
+      <button class="back" data-act="back">${ICON.back}Spiele</button>
+      <div class="top-actions"><span data-pill>${pillHTML()}</span><button class="icon-btn" data-act="game-settings" data-id="${g.id}" aria-label="Spiel-Einstellungen">${ICON.gear}</button></div>
+    </header>
+    <div><h2 class="page-title">${esc(g.name)}</h2>${g.hidden ? '<p class="sub">Auf der Startseite ausgeblendet</p>' : ''}</div>
+
+    <section class="card">
+      <div class="versus">
+        <div class="side m"><span class="who"><i class="dot m"></i>Mats</span><span class="big">${t.m}</span><span class="pct">${t.n ? pct(t.m / t.n) : '–'}</span></div>
+        <div class="mid"><span class="colon">:</span><span class="drawn">${t.d} Unentsch.</span></div>
+        <div class="side g"><span class="who"><i class="dot g"></i>Gerrit</span><span class="big">${t.g}</span><span class="pct">${t.n ? pct(t.g / t.n) : '–'}</span></div>
+      </div>
+      ${bar(t)}
+      <p class="sub">${runden(t.n)}${dec ? ` · ohne Unentschieden: Mats ${pct(t.m / dec)}, Gerrit ${pct(t.g / dec)}` : ''}</p>
+      <button class="primary" data-act="record">Neue Runde erfassen</button>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Verlauf</h3>${seg('chart-mode', [['abs', 'Siege'], ['rate', 'Siegquote']], ui.chartMode)}</div>
+      <div class="card-head">
+        <div class="legend"><span><i class="dot m"></i>Mats</span><span><i class="dot g"></i>Gerrit</span>${ui.chartMode === 'rate' && !ui.drawsIncl ? '' : '<span><i class="dot d"></i>Unentschieden</span>'}</div>
+        ${ui.chartMode === 'rate' ? seg('draws', [['1', 'mit Unentsch.'], ['0', 'ohne']], ui.drawsIncl ? '1' : '0') : ''}
+      </div>
+      <div class="chart" id="chart"></div>
+      ${imp.length ? `<p class="note">Runden ${imp[0]}–${imp[imp.length - 1]} stammen aus euren Zwischenständen. Innerhalb eines Zwischenstands ist die Reihenfolge geschätzt.</p>` : ''}
+    </section>
+
+    <section class="card">${heatHTML(rs)}</section>
+    <section class="card">${tableHTML(rs)}</section>
+    <section class="card">${statsHTML(rs)}</section>
+    <section class="card"><details id="logbox" ${ui.logOpen ? 'open' : ''}>${logHTML(g.id)}</details></section>`;
+  drawChart(rs);
+  const hs = $('.heat-scroll');
+  if (hs) hs.scrollLeft = heatScroll ?? scrollTarget(hs);
+  $('#logbox').addEventListener('toggle', e => ui.logOpen = e.target.open);
+}
+
+/* ---------- Verlaufsdiagramm ---------- */
+let CH = null;
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 1)))); for (const f of [1, 2, 5, 10]) if (f * p >= raw) return f * p; return 10 * p; }
+function drawChart(rs) {
+  const box = $('#chart'); if (!box) return;
+  const N = rs.length;
+  if (!N) { box.innerHTML = '<p class="empty">Noch keine Runden. Erfasst die erste Runde, dann erscheint hier der Verlauf.</p>'; return; }
+  const W = Math.max(260, box.clientWidth), H = 230, L = 40, R = 46, T = 10, B = 24, pw = W - L - R, ph = H - T - B;
+  const rate = ui.chartMode === 'rate', incl = ui.drawsIncl;
+  let m = 0, g = 0, d = 0; const pts = [];
+  rs.forEach((r, i) => { r.result === 'M' ? m++ : r.result === 'G' ? g++ : d++; pts.push({ i:i + 1, m, g, d, r }); });
+  const keys = rate && !incl ? ['m', 'g'] : ['m', 'g', 'd'];
+  const val = (p, k) => { if (!rate) return p[k]; if (incl) return p[k] / p.i; const dd = p.m + p.g; return dd ? p[k] / dd : null; };
+  let yMax, yTicks;
+  if (rate) { yMax = 1; yTicks = [0, .25, .5, .75, 1]; }
+  else { const st = niceStep(Math.max(m, g, d, 1) / 4); yMax = Math.ceil(Math.max(m, g, d, 1) / st) * st; yTicks = []; for (let v = 0; v <= yMax; v += st) yTicks.push(v); }
+  const x = i => L + (N === 1 ? pw / 2 : (i - 1) / (N - 1) * pw);
+  const y = v => T + ph - v / yMax * ph;
+  const xs = niceStep((N - 1) / 5 || 1); const xTicks = [];
+  if (xs >= 5) xTicks.push(1);
+  for (let v = xs; v <= N; v += xs) xTicks.push(v);
+  if (!xTicks.length) xTicks.push(1);
+  const ylab = v => rate ? Math.round(v * 100) + ' %' : v;
+  let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Verlauf der ${rate ? 'Siegquote' : 'Siege'} über ${N} Runden">`;
+  yTicks.forEach(v => { s += `<line x1="${L}" x2="${L + pw}" y1="${y(v)}" y2="${y(v)}" stroke="var(${v === 0 ? '--line-strong' : '--line'})" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 3.5}" text-anchor="end">${ylab(v)}</text>`; });
+  if (rate) s += `<line x1="${L}" x2="${L + pw}" y1="${y(.5)}" y2="${y(.5)}" stroke="var(--faint)" stroke-dasharray="3 3" stroke-width="1"/>`;
+  xTicks.forEach(v => { s += `<text x="${x(v)}" y="${H - 6}" text-anchor="middle">${v}</text>`; });
+  const color = { m:'var(--mats)', g:'var(--gerrit)', d:'var(--draw)' };
+  const order = ['d', 'g', 'm'].filter(k => keys.includes(k));
+  const ends = [];
+  order.forEach(k => {
+    let path = '', pen = false, last = null;
+    pts.forEach(p => { const v = val(p, k); if (v == null) { pen = false; return; } path += (pen ? 'L' : 'M') + x(p.i).toFixed(1) + ' ' + y(v).toFixed(1); pen = true; last = { p, v }; });
+    if (N === 1 && last) path += 'h0.01';
+    s += `<path d="${path}" fill="none" stroke="${color[k]}" stroke-width="${k === 'd' ? 1.6 : 2.2}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (last) { s += `<circle cx="${x(last.p.i)}" cy="${y(last.v)}" r="4" fill="${color[k]}" stroke="var(--surface)" stroke-width="2"/>`; ends.push({ k, y:y(last.v), t:rate ? Math.round(last.v * 100) + ' %' : last.v }); }
+  });
+  ends.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
+  const over = ends.length ? ends[ends.length - 1].y - (T + ph + 4) : 0;
+  if (over > 0) ends.forEach(e => e.y -= over);
+  ends.forEach(e => { s += `<text class="endlab" x="${L + pw + 9}" y="${e.y + 4}">${e.t}</text>`; });
+  s += `<g id="cross" visibility="hidden"><line id="cx-line" y1="${T}" y2="${T + ph}" stroke="var(--faint)" stroke-width="1"/>${keys.map(k => `<circle id="cx-${k}" r="4.5" fill="${color[k]}" stroke="var(--surface)" stroke-width="2"/>`).join('')}</g>`;
+  s += `<rect x="${L - 6}" y="0" width="${pw + 12}" height="${H}" fill="transparent"/></svg><div class="ctip" id="ctip" hidden></div>`;
+  box.innerHTML = s;
+  CH = { W, L, pw, N, pts, keys, val, x, y, rate, incl };
+  const svg = box.querySelector('svg');
+  const move = e => { const rc = svg.getBoundingClientRect(); const px = (e.clientX - rc.left) * (W / rc.width);
+    const i = N === 1 ? 1 : clamp(Math.round((px - L) / pw * (N - 1)) + 1, 1, N); showCross(i); };
+  svg.addEventListener('pointermove', move);
+  svg.addEventListener('pointerdown', move);
+  svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hideCross(); });
+}
+function showCross(i) {
+  const c = CH, p = c.pts[i - 1], X = c.x(i);
+  $('#cross').setAttribute('visibility', 'visible');
+  $('#cx-line').setAttribute('x1', X); $('#cx-line').setAttribute('x2', X);
+  c.keys.forEach(k => { const v = c.val(p, k), el = $('#cx-' + k); if (v == null) { el.setAttribute('visibility', 'hidden'); return; } el.setAttribute('visibility', 'visible'); el.setAttribute('cx', X); el.setAttribute('cy', c.y(v)); });
+  const line = (k, label) => { const v = c.val(p, k); const abs = p[k];
+    return `<div><span><i class="dot ${k}"></i>${label}</span><strong>${c.rate ? (v == null ? '–' : pct(v)) : abs}${c.rate ? '' : ` <span style="color:var(--faint);font-weight:400">(${pct(abs / p.i, 0)})</span>`}</strong></div>`; };
+  const r = p.r;
+  const tip = $('#ctip');
+  tip.innerHTML = `<b>Runde ${i} · ${r.approx ? '≈ ' : ''}${fDate(r.ts)}</b>${line('m', 'Mats')}${line('g', 'Gerrit')}${c.keys.includes('d') ? line('d', 'Unentsch.') : ''}`;
+  tip.hidden = false;
+  const tw = tip.offsetWidth;
+  tip.style.left = (X + 14 + tw > c.W ? X - 14 - tw : X + 14) + 'px';
+}
+function hideCross() { const c = $('#cross'); if (c) c.setAttribute('visibility', 'hidden'); const t = $('#ctip'); if (t) t.hidden = true; }
+
+/* ---------- Kalender (wie bei DDNet) ---------- */
+let HEAT = null;
+const level = n => n === 0 ? 0 : n <= 2 ? 1 : n <= 4 ? 2 : n <= 7 ? 3 : 4;
+function dayMap(rs) {
+  const m = new Map();
+  rs.forEach(r => { const k = dayKey(r.ts); const e = m.get(k) || { n:0, approx:0, M:0, G:0, D:0 }; e.n++; e[r.result]++; if (r.approx) e.approx++; m.set(k, e); });
+  return m;
+}
+function heatHTML(rs) {
+  const today = startOfDay(Date.now());
+  const years = [...new Set(rs.map(r => new Date(r.ts).getFullYear()))].sort((a, b) => b - a);
+  if (ui.heatRange !== '365' && !years.includes(+ui.heatRange)) ui.heatRange = '365';
+  let start, end;
+  if (ui.heatRange === '365') { end = today; start = addDays(today, -364); }
+  else { const yr = +ui.heatRange; start = new Date(yr, 0, 1).getTime(); end = new Date(yr, 11, 31).getTime(); }
+  const map = dayMap(rs);
+  const dow = (new Date(start).getDay() + 6) % 7;
+  const gridStart = addDays(start, -dow);
+  const days = Math.round((end - gridStart) / 864e5) + 1;
+  const cols = Math.ceil(days / 7);
+  const STEP = 15, CELL = 12, LX = 26, TY = 16;
+  const W = LX + cols * STEP, H = TY + 7 * STEP;
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gespielte Runden pro Tag">`;
+  [['Mo', 0], ['Mi', 2], ['Fr', 4]].forEach(([l, r]) => s += `<text x="0" y="${TY + r * STEP + 10}">${l}</text>`);
+  let total = 0, todayCol = cols - 1, lastLabelCol = -9;
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < 7; r++) {
+      const ts = addDays(gridStart, c * 7 + r);
+      if (ts < start || ts > end) continue;
+      const d = new Date(ts);
+      if (d.getDate() === 1 || (c === 0 && r === dow && d.getDate() < 20)) {
+        if (c - lastLabelCol >= 3) { s += `<text x="${LX + c * STEP}" y="10">${MON[d.getMonth()]}</text>`; lastLabelCol = c; }
+      }
+      const k = dayKey(ts), e = map.get(k), n = e ? e.n : 0;
+      if (ts <= today) total += n;
+      if (ts === today) todayCol = c;
+      const fut = ts > today;
+      s += `<rect class="hc h${level(n)}${fut ? ' fut' : ''}${ui.day === k ? ' sel' : ''}" ${fut ? '' : `data-act="day" data-day="${k}"`} x="${LX + c * STEP}" y="${TY + r * STEP}" width="${CELL}" height="${CELL}" rx="2.5"/>`;
+    }
+  }
+  s += '</svg>';
+  HEAT = { map, todayCol, STEP, LX };
+  const rangeLabel = ui.heatRange === '365' ? 'in den letzten 365 Tagen' : 'im Jahr ' + ui.heatRange;
+  const opts = [['365', '365 Tage'], ...years.map(y => [String(y), String(y)])];
+  let info = '';
+  if (ui.day) {
+    const e = map.get(ui.day);
+    info = `<div class="dayinfo"><span><strong>${fDateLong(keyToDate(ui.day))}</strong> · ${e ? `${runden(e.n)} · Mats ${e.M} · Gerrit ${e.G}${e.D ? ' · ' + e.D + ' Unentsch.' : ''}${e.approx ? ` · ${e.approx} mit geschätztem Datum` : ''}` : 'nicht gespielt'}</span><button class="link" data-act="clear-day">Aufheben</button></div>`;
+  }
+  return `<div class="card-head"><h3>Gespielte Runden</h3>${seg('heat-range', opts, ui.heatRange)}</div>
+    <div class="heat-scroll">${s}</div>
+    <div class="heat-foot"><span><strong style="color:var(--fg)">${runden(total)}</strong> ${rangeLabel}</span>
+      <span class="scale">weniger<i style="background:var(--h0)"></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i>mehr</span></div>
+    ${info || '<p class="note">Tippe auf einen Tag, um seine Runden in der Tabelle zu sehen.</p>'}`;
+}
+function scrollTarget(el) { return HEAT ? Math.max(0, HEAT.LX + (HEAT.todayCol + 1) * HEAT.STEP - el.clientWidth + 8) : 0; }
+document.addEventListener('pointerover', e => {
+  const t = e.target.closest?.('rect[data-day]'); const tip = $('#tip');
+  if (!t || e.pointerType !== 'mouse') { tip.hidden = true; return; }
+  const e2 = HEAT?.map.get(t.dataset.day), n = e2 ? e2.n : 0;
+  tip.textContent = (n ? runden(n) + ' am ' : 'Keine Runde am ') + keyToDate(t.dataset.day).toLocaleDateString('de-DE') + (e2?.approx ? ' (Datum teils geschätzt)' : '');
+  tip.hidden = false;
+  const rc = t.getBoundingClientRect();
+  tip.style.left = clamp(rc.left + rc.width / 2 - tip.offsetWidth / 2, 8, innerWidth - tip.offsetWidth - 8) + 'px';
+  tip.style.top = (rc.top - tip.offsetHeight - 8) + 'px';
+});
+
+/* ---------- Tabelle ---------- */
+function whenHTML(r) {
+  if (!r.tk) return `<span${r.approx ? ` class="approx" title="Datum geschätzt (aus Zwischenstand)"` : ''}>${r.approx ? '≈ ' : ''}${fDate(r.ts)}</span>`;
+  return `${fDate(r.ts)} · ${fTime(r.ts)}`;
+}
+function tableHTML(rs) {
+  const numbered = rs.map((r, i) => ({ r, n:i + 1 }));
+  let list, head, foot = '';
+  if (ui.day) {
+    list = numbered.filter(x => dayKey(x.r.ts) === ui.day);
+    head = `<h3>Runden am ${keyToDate(ui.day).toLocaleDateString('de-DE')}</h3><button class="link" data-act="clear-day">✕ Alle Runden</button>`;
+  } else {
+    list = numbered.slice(-ui.limit);
+    head = `<h3>Letzte Runden</h3>${seg('limit', [[10, '10'], [25, '25'], [50, '50'], [100, '100']], ui.limit)}`;
+    if (rs.length) foot = `<div class="tbl-foot"><span>${rs.length > ui.limit ? `Zeigt ${ui.limit} von ${rs.length} Runden.` : `Alle ${runden(rs.length)} angezeigt.`}</span><button class="link" data-act="all-rounds">Alle Runden anzeigen ›</button></div>`;
+  }
+  list = list.slice().reverse();
+  return `<div class="card-head">${head}</div>
+    ${list.length ? `<div class="tbl-wrap"><table><thead><tr><th>Nr.</th><th>Datum</th><th>Ergebnis</th><th></th></tr></thead><tbody>${rowsHTML(list)}</tbody></table></div>` : `<p class="empty">${ui.day ? 'An diesem Tag habt ihr nicht gespielt.' : 'Noch keine Runden erfasst.'}</p>`}
+    ${foot}`;
+}
+function rowsHTML(list) {
+  return list.map(({ r, n }) => `<tr>
+      <td class="num">${n}</td>
+      <td class="when">${whenHTML(r)}</td>
+      <td class="res"><div class="r"><i class="dot ${P[r.result].c}"></i>${P[r.result].name}</div>${r.note ? `<div class="n">${esc(r.note)}</div>` : ''}</td>
+      <td class="act"><button class="dots" data-act="menu" data-id="${r.id}" aria-label="Aktionen für Runde ${n}">⋯</button></td></tr>`).join('');
+}
+
+/* ---------- Statistik ---------- */
+function statsHTML(rs) {
+  const live = rs.filter(r => r.src !== 'import');
+  let cur = null, curN = 0; const best = { M:0, G:0 }; let run = null, runN = 0;
+  live.forEach(r => { if (r.result === 'D') { run = null; runN = 0; return; } if (r.result === run) runN++; else { run = r.result; runN = 1; } best[run] = Math.max(best[run], runN); });
+  cur = run; curN = runN;
+  const tiles = live.length
+    ? `<div class="tile"><div class="k">Aktuelle Serie</div><div class="v">${cur ? curN + ' ' + (curN === 1 ? 'Sieg' : 'Siege') : '–'}</div><div class="s">${cur ? P[cur].name + ' in Folge' : 'Letzte Runde unentschieden'}</div></div>
+       <div class="tile"><div class="k">Längste Serie</div><div class="v">${best.M}</div><div class="s"><i class="dot m"></i>Mats</div></div>
+       <div class="tile"><div class="k">Längste Serie</div><div class="v">${best.G}</div><div class="s"><i class="dot g"></i>Gerrit</div></div>`
+    : '';
+  const months = new Map();
+  rs.forEach(r => { const d = new Date(r.ts), k = d.getFullYear() * 100 + d.getMonth(); const e = months.get(k) || { y:d.getFullYear(), mo:d.getMonth(), rs:[] }; e.rs.push(r); months.set(k, e); });
+  const mrows = [...months.entries()].sort((a, b) => b[0] - a[0]).map(([, e]) => { const t = tally(e.rs);
+    return `<div class="month"><span class="lab">${MONL[e.mo]} ${e.y}</span>${bar(t)}<span class="nums">${runden(t.n)} · Mats ${t.m} · Gerrit ${t.g}${t.d ? ' · ' + t.d + ' Unentsch.' : ''}</span></div>`; }).join('');
+  return `<div class="card-head"><h3>Statistik</h3></div>
+    ${tiles ? `<div class="tiles">${tiles}</div>` : '<p class="note">Siegesserien zählen ab der ersten Runde, die ihr hier in der App erfasst. Bei den übernommenen Zwischenständen ist die Reihenfolge nicht bekannt.</p>'}
+    <h3 style="font-size:14px;color:var(--muted);margin-top:4px">Bilanz pro Monat</h3>
+    <div class="months">${mrows || '<p class="empty">Noch keine Runden.</p>'}</div>
+    ${rs.some(r => r.approx) ? '<p class="note">Runden mit geschätztem Datum sind dem Monat ihres Zwischenstands zugeordnet.</p>' : ''}`;
+}
+
+/* ---------- Änderungsprotokoll ---------- */
+function describe(e) {
+  if (e.action === 'create-game') return `${esc(e.by)} hat das Spiel „${esc(e.after?.name)}“ angelegt`;
+  if (!e.after && !e.before) return esc(e.text || e.action);
+  if (e.action === 'rename') return `${esc(e.by)} hat das Spiel umbenannt: „${esc(e.before.name)}“ → „${esc(e.after.name)}“`;
+  if (e.action === 'hide') return `${esc(e.by)} hat das Spiel auf der Startseite ausgeblendet`;
+  if (e.action === 'show') return `${esc(e.by)} hat das Spiel auf der Startseite wieder eingeblendet`;
+  const what = s => `${P[s.result].name}, ${s.tk ? fDate(s.ts) + ' ' + fTime(s.ts) : fDate(s.ts)}`;
+  if (e.action === 'create') return `${esc(e.by)} hat eine Runde erfasst: ${what(e.after)}`;
+  if (e.action === 'undo') return `${esc(e.by)} hat eine Erfassung rückgängig gemacht: ${what(e.before)}`;
+  if (e.action === 'delete') return `${esc(e.by)} hat eine Runde gelöscht: ${what(e.before)}`;
+  if (e.action === 'restore') return `${esc(e.by)} hat eine Runde wiederhergestellt: ${what(e.after)}`;
+  const ch = [];
+  if (e.before.result !== e.after.result) ch.push(`Ergebnis ${P[e.before.result].name} → ${P[e.after.result].name}`);
+  if (e.before.ts !== e.after.ts) ch.push(`Zeitpunkt ${e.before.tk ? fDate(e.before.ts) + ' ' + fTime(e.before.ts) : fDate(e.before.ts)} → ${fDate(e.after.ts)} ${fTime(e.after.ts)}`);
+  if ((e.before.note || '') !== (e.after.note || '')) ch.push(e.after.note ? `Notiz „${esc(e.after.note)}“` : 'Notiz entfernt');
+  return `${esc(e.by)} hat eine Runde geändert (${what(e.before)}): ${ch.join('; ')}`;
+}
+function logHTML(gid) {
+  const all = S.log.filter(e => e.game === gid).slice().reverse();
+  const list = ui.logAll ? all : all.slice(0, 15);
+  const items = list.map(e => { const r = S.rounds.find(x => x.id === e.roundId);
+    const canRestore = (e.action === 'delete' || e.action === 'undo') && r && r.deleted && S.log.filter(x => x.roundId === r.id).pop() === e;
+    return `<div class="log-item"><div><time>${fDate(e.ts)} · ${fTime(e.ts)}</time>${describe(e)}</div>${canRestore ? `<button class="link" data-act="restore" data-id="${r.id}">Wiederherstellen</button>` : ''}</div>`; }).join('');
+  return `<summary>Änderungsprotokoll <span class="note" style="margin-left:auto;margin-right:10px;font-weight:400">${all.length ? all.length + ' Einträge' : 'leer'}</span></summary>
+    <div class="log">${items || '<p class="note" style="padding-top:6px">Noch keine Änderungen. Hier erscheint jede erfasste, geänderte und gelöschte Runde mit Zeitpunkt und Person.</p>'}
+    ${all.length > list.length ? `<button class="link" style="padding-top:10px;text-align:left" data-act="log-all">Alle ${all.length} Einträge anzeigen</button>` : ''}</div>`;
+}
+
+/* ---------- Sheets, Menü, Toast ---------- */
+function openSheet(html) { const root = $('#sheet-root'); root.innerHTML = `<div class="overlay" data-act="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true">${html}</div>`; root.hidden = false; }
+function closeSheet() { const root = $('#sheet-root'); root.hidden = true; root.innerHTML = ''; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeSheet(); hideMenu(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.game-card')) { e.preventDefault(); e.target.click(); }
+});
+function hideMenu() { const m = $('#menu'); if (m) m.hidden = true; }
+let toastT;
+function toast(msg, undoId, undoAct = 'undo') {
+  const t = $('#toast');
+  t.innerHTML = `<span>${msg}</span>${undoId ? `<button data-act="${undoAct}" data-id="${undoId}">Rückgängig</button>` : ''}`;
+  t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 6000);
+}
+
+function recordSheet() {
+  const g = S.games.find(x => x.id === ui.gameId), n = roundsOf(g.id).length + 1;
+  recPick = null;
+  openSheet(`<h2>Wer hat gewonnen?</h2><p class="sub">${esc(g.name)} · Runde ${n} · Zeitpunkt wird beim Erfassen gesetzt</p>
+    <div class="pick" id="rec-pick">
+      <button data-act="pick" data-v="M" aria-pressed="false"><span class="sw" style="background:var(--mats)"></span>Mats</button>
+      <button data-act="pick" data-v="G" aria-pressed="false"><span class="sw" style="background:var(--gerrit)"></span>Gerrit</button>
+      <button class="wide" data-act="pick" data-v="D" aria-pressed="false"><span class="sw" style="background:var(--draw)"></span>Unentschieden</button>
+    </div>
+    <label class="field" for="rec-note">Notiz (optional)<input id="rec-note" type="text" placeholder="z. B. Handkarten beim Unentschieden" autocomplete="off"></label>
+    <button class="primary" id="rec-ok" data-act="rec-confirm" disabled>Ergebnis auswählen</button>
+    <button class="secondary" data-act="close-sheet">Abbrechen</button>`);
+}
+let recPick = null;
+
+let gsState = null;
+function gameSettingsSheet(id) {
+  const g = S.games.find(x => x.id === id); if (!g) return;
+  gsState = { id, hidden:!!g.hidden };
+  openSheet(`<h2>Spiel-Einstellungen</h2>
+    <label class="field" for="gs-name">Name<input id="gs-name" type="text" value="${esc(g.name)}" autocomplete="off"></label>
+    <p class="hint" id="gs-err" hidden></p>
+    <div class="switch-row"><span>Auf der Startseite ausblenden<br><span class="hint">Runden und Statistik bleiben vollständig erhalten. Unter Einstellungen → Spiele verwalten kannst du das Spiel wieder einblenden.</span></span>
+      <button class="switch" data-act="gs-hidden" aria-pressed="${gsState.hidden}" aria-label="Auf der Startseite ausblenden"></button></div>
+    <div class="row"><button class="secondary" data-act="close-sheet">Abbrechen</button><button class="primary" data-act="gs-save">Speichern</button></div>`);
+}
+function manageSheet() {
+  const rows = S.games.map(g => `<div class="manage-row">
+      <button class="nm" data-act="open-game" data-id="${g.id}"><b>${esc(g.name)}</b><span>${runden(roundsOf(g.id).length)}${g.hidden ? ' · ausgeblendet' : ''}</span></button>
+      <button class="switch" data-act="mg-toggle" data-id="${g.id}" aria-pressed="${!g.hidden}" aria-label="${esc(g.name)} auf der Startseite zeigen"></button></div>`).join('');
+  openSheet(`<h2>Spiele verwalten</h2>
+    <p class="sub">Schalter an: Das Spiel steht auf der Startseite. Ausgeblendete Spiele behalten alle Runden und lassen sich hier jederzeit wieder einblenden.</p>
+    <div class="manage">${rows}</div>
+    <button class="primary" data-act="close-sheet">Fertig</button>`);
+}
+const nameTaken = (name, exceptId) => S.games.find(g => g.id !== exceptId && g.name.trim().toLowerCase() === name.toLowerCase());
+let editState = null;
+function editSheet(id) {
+  const r = S.rounds.find(x => x.id === id); if (!r) return;
+  editState = { id, result:r.result, orig:toLocalInput(r.ts) };
+  openSheet(`<h2>Runde bearbeiten</h2>
+    <div class="field">Ergebnis<div class="radio3" id="ed-res">${['M', 'G', 'D'].map(k => `<button data-act="ed-res" data-v="${k}" aria-pressed="${r.result === k}"><i class="dot ${P[k].c}"></i>${k === 'D' ? 'Unentsch.' : P[k].name}</button>`).join('')}</div></div>
+    <label class="field" for="ed-ts">Datum und Uhrzeit<input id="ed-ts" type="datetime-local" value="${editState.orig}">
+      ${!r.tk ? `<span class="hint">${r.approx ? 'Datum geschätzt aus dem Zwischenstand, Uhrzeit unbekannt.' : 'Uhrzeit unbekannt.'} Wenn du hier nichts änderst, bleibt das so.</span>` : ''}</label>
+    <label class="field" for="ed-note">Notiz<input id="ed-note" type="text" value="${esc(r.note)}" autocomplete="off"></label>
+    <div class="row"><button class="secondary" data-act="close-sheet">Abbrechen</button><button class="primary" data-act="save-edit">Speichern</button></div>`);
+}
+function deleteSheet(id) {
+  const r = S.rounds.find(x => x.id === id); if (!r) return;
+  openSheet(`<h2>Runde löschen?</h2><p class="sub" style="margin-top:0">${P[r.result].name} · ${r.approx ? '≈ ' : ''}${fDate(r.ts)}${r.tk ? ' · ' + fTime(r.ts) : ''}</p>
+    <p class="sub" style="margin-top:0">Die Runde verschwindet aus Stand, Diagramm und Kalender. Im Änderungsprotokoll bleibt sie erhalten und lässt sich wiederherstellen.</p>
+    <div class="row"><button class="secondary" data-act="close-sheet">Abbrechen</button><button class="danger-btn" data-act="del-confirm" data-id="${id}">Löschen</button></div>`);
+}
+function meSheet(first) {
+  openSheet(`<h2>${first ? 'Wer bist du?' : 'Einstellungen'}</h2>
+    ${first ? '<p class="sub">Damit im Änderungsprotokoll steht, wer eine Runde erfasst oder geändert hat. Das Handy merkt sich die Auswahl.</p>' : ''}
+    <div class="field">Ich bin<div class="radio3" style="grid-template-columns:1fr 1fr">${['Mats', 'Gerrit'].map(n => `<button data-act="me" data-v="${n}" aria-pressed="${S.me === n}"><i class="dot ${n === 'Mats' ? 'm' : 'g'}"></i>${n}</button>`).join('')}</div></div>
+    ${first ? '' : `
+    <button class="secondary" data-act="manage-games">Spiele verwalten (${S.games.length})</button>
+    <h3 style="font-size:15px;margin-top:4px">Verbindung zum Sheet</h3>
+    <div class="kv"><span>Letzter Abgleich</span><span>${S.lastSync ? fDate(S.lastSync) + ' · ' + fTime(S.lastSync) : 'noch keiner'}</span></div>
+    <div class="kv"><span>Warten auf Upload</span><span>${S.queue.length ? S.queue.length + (S.queue.length === 1 ? ' Änderung' : ' Änderungen') : 'nichts'}</span></div>
+    <button class="secondary" data-act="sync-now" data-force="1">Jetzt komplett neu laden</button>
+    <button class="secondary" data-act="copy-code">Einrichtungscode für Gerrit kopieren</button>
+    <div id="code-out" hidden></div>
+    <button class="secondary" data-act="disconnect" style="color:var(--danger)">Verbindung auf diesem Handy trennen</button>
+    <button class="primary" data-act="close-sheet">Fertig</button>`}`);
+}
+function newGameSheet() {
+  openSheet(`<h2>Neues Spiel hinzufügen</h2>
+    <label class="field" for="ng-name">Name des Spiels<input id="ng-name" type="text" placeholder="z. B. Mau-Mau" autocomplete="off"></label>
+    <p class="hint" id="ng-err" hidden></p>
+    <div class="row"><button class="secondary" data-act="close-sheet">Abbrechen</button><button class="primary" data-act="create-game">Anlegen</button></div>`);
+  setTimeout(() => $('#ng-name')?.focus(), 50);
+}
+
+/* ---------- Aktionen ---------- */
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el || !el.closest('#menu')) { if (!el || !['menu', 'gmenu'].includes(el.dataset.act)) hideMenu(); }
+  if (!el) return;
+  const a = el.dataset.act, v = el.dataset.v, id = el.dataset.id;
+  switch (a) {
+    case 'open-game': closeSheet(); ui.view = 'game'; ui.gameId = id; ui.day = null; ui.logAll = false; location.hash = 'spiel-' + id; render(); scrollTo(0, 0); break;
+    case 'back': ui.view = 'home'; history.replaceState(null, '', location.pathname + location.search); render(); scrollTo(0, 0); break;
+    case 'back-game': ui.view = 'game'; render(); scrollTo(0, 0); break;
+    case 'all-rounds': ui.view = 'all'; ui.allShown = 200; render(); scrollTo(0, 0); break;
+    case 'all-more': ui.allShown += 200; render(); break;
+    case 'settings': meSheet(false); break;
+    case 'record': if (!S.me) { meSheet(true); break; } recordSheet(); break;
+    case 'pick':
+      recPick = v;
+      document.querySelectorAll('#rec-pick button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+      $('#rec-ok').disabled = false;
+      $('#rec-ok').textContent = 'Runde erfassen · ' + (v === 'D' ? 'Unentschieden' : P[v].name + ' gewinnt');
+      break;
+    case 'rec-confirm': {
+      if (!recPick) break;
+      const note = ($('#rec-note')?.value || '').trim();
+      const r = { id:uid(), game:ui.gameId, ts:Date.now(), result:recPick, note, by:S.me, src:'app', approx:false, tk:true, deleted:false };
+      S.rounds.push(r); closeSheet(); commit('create', r, null);
+      toast(`Runde ${roundsOf(ui.gameId).length} erfasst: ${r.result === 'D' ? 'Unentschieden' : P[r.result].name + ' gewinnt'}`, r.id); break; }
+    case 'game-settings': hideMenu(); if (!S.me) { meSheet(true); break; } gameSettingsSheet(id); break;
+    case 'gs-hidden': gsState.hidden = !gsState.hidden; el.setAttribute('aria-pressed', gsState.hidden); break;
+    case 'gs-save': {
+      const g = S.games.find(x => x.id === gsState.id), name = $('#gs-name').value.trim(), err = $('#gs-err');
+      if (!name) { err.textContent = 'Bitte gib einen Namen ein.'; err.hidden = false; break; }
+      const dup = nameTaken(name, g.id);
+      if (dup) { err.textContent = `Es gibt schon ein Spiel „${dup.name}“${dup.hidden ? ' (ausgeblendet)' : ''}.`; err.hidden = false; break; }
+      closeSheet();
+      if (name !== g.name) { const b = { name:g.name, hidden:!!g.hidden }; g.name = name; commitGame('rename', g, b); }
+      setHidden(g, gsState.hidden);
+      toast('Gespeichert'); break; }
+    case 'manage-games': manageSheet(); break;
+    case 'mg-toggle': { const g = S.games.find(x => x.id === id); setHidden(g, !g.hidden); manageSheet(); break; }
+    case 'gmenu': {
+      const m = $('#menu'), rc = el.getBoundingClientRect();
+      if (!m.hidden && m.dataset.for === id) { hideMenu(); break; }
+      m.dataset.for = id;
+      m.innerHTML = `<button data-act="game-settings" data-id="${id}">Umbenennen</button><button data-act="ghide" data-id="${id}">Ausblenden</button>`;
+      m.hidden = false;
+      m.style.top = (rc.bottom + 4) + 'px'; m.style.left = Math.max(8, rc.right - m.offsetWidth) + 'px'; break; }
+    case 'ghide': { hideMenu(); if (!S.me) { meSheet(true); break; } const g = S.games.find(x => x.id === id); setHidden(g, true); toast(`„${esc(g.name)}“ ausgeblendet`, id, 'undo-hide'); break; }
+    case 'undo-hide': { const g = S.games.find(x => x.id === id); if (g) setHidden(g, false); $('#toast').hidden = true; break; }
+    case 'undo': { const r = S.rounds.find(x => x.id === id); if (r && !r.deleted) { const b = snap(r); r.deleted = true; commit('undo', r, b); } $('#toast').hidden = true; break; }
+    case 'menu': {
+      const m = $('#menu'), rc = el.getBoundingClientRect();
+      if (!m.hidden && m.dataset.for === id) { hideMenu(); break; }
+      m.dataset.for = id;
+      m.innerHTML = `<button data-act="edit" data-id="${id}">Bearbeiten</button><button class="del" data-act="del" data-id="${id}">Löschen</button>`;
+      m.hidden = false;
+      const top = rc.bottom + 4 + m.offsetHeight > innerHeight ? rc.top - m.offsetHeight - 4 : rc.bottom + 4;
+      m.style.top = top + 'px'; m.style.left = Math.max(8, rc.right - m.offsetWidth) + 'px'; break; }
+    case 'edit': hideMenu(); if (!S.me) { meSheet(true); break; } editSheet(id); break;
+    case 'del': hideMenu(); if (!S.me) { meSheet(true); break; } deleteSheet(id); break;
+    case 'ed-res': editState.result = v; document.querySelectorAll('#ed-res button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); break;
+    case 'save-edit': {
+      const r = S.rounds.find(x => x.id === editState.id); const b = snap(r);
+      const tsv = $('#ed-ts').value, note = $('#ed-note').value.trim();
+      r.result = editState.result; r.note = note;
+      if (tsv && tsv !== editState.orig) { const t = new Date(tsv).getTime(); if (!isNaN(t)) { r.ts = t; r.tk = true; r.approx = false; } }
+      closeSheet();
+      if (JSON.stringify(b) === JSON.stringify(snap(r))) break;
+      commit('update', r, b); toast('Änderung gespeichert'); break; }
+    case 'del-confirm': { const r = S.rounds.find(x => x.id === id); const b = snap(r); r.deleted = true; closeSheet(); commit('delete', r, b); toast('Runde gelöscht', null); break; }
+    case 'restore': { if (!S.me) { meSheet(true); break; } const r = S.rounds.find(x => x.id === id); const b = snap(r); r.deleted = false; commit('restore', r, b); toast('Runde wiederhergestellt'); break; }
+    case 'chart-mode': ui.chartMode = v; render(); break;
+    case 'draws': ui.drawsIncl = v === '1'; render(); break;
+    case 'limit': ui.limit = +v; render(); break;
+    case 'heat-range': ui.heatRange = v; ui.day = null; render(); { const h = $('.heat-scroll'); if (h) h.scrollLeft = scrollTarget(h); } break;
+    case 'day': ui.day = ui.day === el.dataset.day ? null : el.dataset.day; $('#tip').hidden = true; render(); break;
+    case 'clear-day': ui.day = null; render(); break;
+    case 'log-all': ui.logAll = true; render(); break;
+    case 'me': S.me = v; save(); document.querySelectorAll('[data-act="me"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+      if ($('.sheet h2')?.textContent === 'Wer bist du?') { closeSheet(); toast('Hallo ' + v + '!'); } break;
+    case 'sync-now': if (el.dataset.force) { closeSheet(); toast('Lade alles neu …'); } sync(!!el.dataset.force); break;
+    case 'copy-code': {
+      const code = makeCode(S.cfg), out = $('#code-out');
+      const shown = () => { out.innerHTML = `<p class="hint" style="margin-bottom:6px">Schick Gerrit diesen Code. Er gehört nur euch beiden, denn er enthält die PIN.</p><div class="code-box">${esc(code)}</div>`; out.hidden = false; };
+      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(code).then(() => { toast('Einrichtungscode kopiert'); shown(); }, shown); else shown();
+      break; }
+    case 'disconnect':
+      if (el.dataset.armed) {
+        if (S.queue.length) { el.textContent = `Erst abgleichen: ${S.queue.length} Änderungen sind noch nicht hochgeladen`; break; }
+        const me = S.me; S = empty(); S.me = me; save(); closeSheet(); ui.view = 'home'; render();
+      } else { el.dataset.armed = '1'; el.textContent = 'Wirklich trennen? Nochmal tippen'; }
+      break;
+    case 'connect': {
+      const err = $('#su-err'), btn = $('#su-btn'), codeTxt = $('#su-code').value.trim();
+      let cfg;
+      try {
+        if (codeTxt) { cfg = readCode(codeTxt); if (!cfg) throw { code:'bad-code' }; }
+        else { cfg = { url:$('#su-url').value.trim(), pin:$('#su-pin').value.trim() }; }
+        if (!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(cfg.url)) throw { code:'bad-url' };
+      } catch (e) { err.textContent = connectError(e); err.hidden = false; break; }
+      err.hidden = true; btn.disabled = true; btn.textContent = 'Verbinde …';
+      connect(cfg).then(() => { render(); if (!S.me) meSheet(true); else toast('Verbunden'); })
+        .catch(e => { err.textContent = connectError(e); err.hidden = false; btn.disabled = false; btn.textContent = 'Verbinden'; });
+      break; }
+    case 'new-game': newGameSheet(); break;
+    case 'create-game': {
+      const name = $('#ng-name').value.trim(), err = $('#ng-err');
+      if (!name) { err.textContent = 'Bitte gib einen Namen ein.'; err.hidden = false; break; }
+      const dup = nameTaken(name);
+      if (dup) { err.textContent = dup.hidden ? `„${dup.name}“ gibt es schon, es ist ausgeblendet. Über Einstellungen → Spiele verwalten kannst du es wieder einblenden.` : 'Dieses Spiel gibt es schon.'; err.hidden = false; break; }
+      if (!S.me) { meSheet(true); break; }
+      const g = { id:'g' + uid(), name, created:Date.now(), hidden:false }; S.games.push(g); closeSheet();
+      ui.view = 'game'; ui.gameId = g.id; ui.day = null; commitGame('create-game', g, null); scrollTo(0, 0); break; }
+    case 'close-sheet': closeSheet(); break;
+  }
+});
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#chart')) hideCross(); });
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (ui.view === 'game') drawChart(roundsOf(ui.gameId)); }, 120); });
+
+/* Start: direkt in ein Spiel springen, wenn der Link eins nennt */
+const h = location.hash.replace('#spiel-', '');
+if (h && S.games.some(g => g.id === h)) { ui.view = 'game'; ui.gameId = h; }
+render();
+if (S.cfg && !S.me) meSheet(true);
+sync();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
